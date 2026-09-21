@@ -42,8 +42,15 @@ export async function listSamples() {
   return data
 }
 
-export async function listJobs() {
-  const { data } = await api.get('/jobs')
+export async function listJobs({ includeArchived = false } = {}) {
+  const { data } = await api.get('/jobs', {
+    params: { include_archived: includeArchived },
+  })
+  return data
+}
+
+export async function archiveJob(id) {
+  const { data } = await api.post(`/jobs/${id}/archive`)
   return data
 }
 

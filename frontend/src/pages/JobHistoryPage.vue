@@ -3,6 +3,13 @@
     <div class="row items-center q-mb-md">
       <div class="text-h5">作业历史</div>
       <q-space />
+      <q-toggle
+        v-model="includeArchived"
+        label="含归档"
+        color="primary"
+        class="q-mr-md"
+        @update:model-value="load"
+      />
       <q-btn flat icon="refresh" label="刷新" @click="load" :loading="loading" />
       <q-btn
         v-if="auth.role === 'bioops'"
@@ -22,11 +29,15 @@
       :loading="loading"
       hide-pagination
       :pagination="{ rowsPerPage: 0 }"
+      :row-class="rowClass"
     >
       <template #body-cell-status="props">
         <q-td :props="props">
           <q-badge :color="statusColor(props.row.status)">
             {{ statusLabel(props.row.status) }}
+          </q-badge>
+          <q-badge v-if="props.row.is_archived" color="grey-7" class="q-ml-sm">
+            已归档
           </q-badge>
         </q-td>
       </template>
@@ -43,6 +54,15 @@
       <template #body-cell-actions="props">
         <q-td :props="props">
           <q-btn dense flat color="primary" label="详情" :to="`/jobs/${props.row.id}`" />
+          <q-btn
+            v-if="canArchive(props.row)"
+            dense
+            flat
+            color="grey-7"
+            label="归档"
+            :loading="archivingId === props.row.id"
+            @click="onArchive(props.row)"
+          />
         </q-td>
       </template>
     </q-table>
@@ -52,13 +72,15 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useQuasar } from 'quasar'
-import { listJobs } from '../api/client'
+import { archiveJob, listJobs } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
 const $q = useQuasar()
 const loading = ref(false)
 const rows = ref([])
+const includeArchived = ref(false)
+const archivingId = ref(null)
 
 const columns = [
   { name: 'id', label: 'ID', field: 'id', align: 'left' },
@@ -84,10 +106,32 @@ function statusColor(s) {
   return { pending: 'grey', running: 'info', success: 'positive', failed: 'negative' }[s] || 'grey'
 }
 
+function rowClass(row) {
+  return row.is_archived ? 'text-grey-6' : ''
+}
+
+// 只有成功态允许归档，且仅运维可操作
+function canArchive(row) {
+  return auth.role === 'bioops' && row.status === 'success' && !row.is_archived
+}
+
+async function onArchive(row) {
+  archivingId.value = row.id
+  try {
+    await archiveJob(row.id)
+    $q.notify({ type: 'positive', message: `作业 #${row.id} 已归档` })
+    await load()
+  } catch (e) {
+    $q.notify({ type: 'negative', message: e.message || '归档失败' })
+  } finally {
+    archivingId.value = null
+  }
+}
+
 async function load() {
   loading.value = true
   try {
-    rows.value = await listJobs()
+    rows.value = await listJobs({ includeArchived: includeArchived.value })
   } catch (e) {
     $q.notify({ type: 'negative', message: e.message || '加载失败' })
   } finally {

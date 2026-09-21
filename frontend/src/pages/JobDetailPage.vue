@@ -1,8 +1,19 @@
 <template>
   <q-page class="page-pad">
     <div class="row items-center q-mb-md">
-      <div class="text-h5">作业详情 #{{ job?.id || '…' }}</div>
+      <div class="text-h5">
+        作业详情 #{{ job?.id || '…' }}
+        <q-badge v-if="job?.is_archived" color="grey-7" class="q-ml-sm">已归档</q-badge>
+      </div>
       <q-space />
+      <q-btn
+        v-if="canArchive"
+        color="grey-7"
+        label="归档"
+        class="q-mr-sm"
+        :loading="archiving"
+        @click="onArchive"
+      />
       <q-btn flat icon="refresh" label="刷新" @click="load" :loading="loading" />
       <q-btn flat label="返回历史" to="/jobs" />
     </div>
@@ -11,6 +22,10 @@
       状态：{{ statusLabel(job.status) }}
       · 样例：{{ job.sample_name }}
       · 提交人：{{ job.created_by }}
+      <template v-if="job.is_archived">
+        · 归档人：{{ job.archived_by || '—' }}
+        · 归档时间：{{ formatTime(job.archived_at) }}
+      </template>
       <div v-if="job.error_message" class="q-mt-sm">失败原因：{{ job.error_message }}</div>
     </q-banner>
 
@@ -68,16 +83,24 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
-import { getJob, getJobStages } from '../api/client'
+import { archiveJob, getJob, getJobStages } from '../api/client'
+import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
 const $q = useQuasar()
+const auth = useAuthStore()
 const loading = ref(false)
 const job = ref(null)
 const stages = ref([])
+const archiving = ref(false)
 let timer = null
 
 const metrics = computed(() => job.value?.metrics || null)
+
+// 只有成功态允许归档，且仅运维可操作
+const canArchive = computed(
+  () => auth.role === 'bioops' && job.value?.status === 'success' && !job.value?.is_archived,
+)
 
 const metricCards = computed(() => {
   const m = metrics.value
@@ -155,6 +178,19 @@ async function load() {
     $q.notify({ type: 'negative', message: e.message || '加载失败' })
   } finally {
     loading.value = false
+  }
+}
+
+async function onArchive() {
+  if (!job.value) return
+  archiving.value = true
+  try {
+    job.value = await archiveJob(job.value.id)
+    $q.notify({ type: 'positive', message: `作业 #${job.value.id} 已归档` })
+  } catch (e) {
+    $q.notify({ type: 'negative', message: e.message || '归档失败' })
+  } finally {
+    archiving.value = false
   }
 }
 

@@ -55,6 +55,9 @@ class JobOut(BaseModel):
     error_message: str | None
     created_at: datetime
     finished_at: datetime | None
+    is_archived: bool = False
+    archived_at: datetime | None
+    archived_by: str | None
     stages: list[StageOut] = []
 
     model_config = {"from_attributes": True}
@@ -70,6 +73,9 @@ class JobListItem(BaseModel):
     error_message: str | None
     created_at: datetime
     finished_at: datetime | None
+    is_archived: bool = False
+    archived_at: datetime | None
+    archived_by: str | None
 
     model_config = {"from_attributes": True}
 
