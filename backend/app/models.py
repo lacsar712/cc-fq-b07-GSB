@@ -31,6 +31,11 @@ class Job(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # 归档层：仅 success 作业可由运维归档；归档只是标记，数据永不物理删除
+    is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    archived_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     stages: Mapped[list["JobStage"]] = relationship(
         "JobStage", back_populates="job", cascade="all, delete-orphan", order_by="JobStage.stage_order"
     )

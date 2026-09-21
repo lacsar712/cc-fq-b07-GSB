@@ -11,6 +11,12 @@
       状态：{{ statusLabel(job.status) }}
       · 样例：{{ job.sample_name }}
       · 提交人：{{ job.created_by }}
+      <div v-if="job.is_archived" class="q-mt-sm">
+        <q-icon name="inventory_2" /> 已收入归档层
+        <template v-if="job.archived_by">
+          （{{ job.archived_by }}<template v-if="job.archived_at"> · {{ formatTime(job.archived_at) }}</template>）
+        </template>
+      </div>
       <div v-if="job.error_message" class="q-mt-sm">失败原因：{{ job.error_message }}</div>
     </q-banner>
 

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
@@ -97,8 +99,42 @@ def create_job(
 
 
 @router.get("/jobs", response_model=list[JobListItem])
-def list_jobs(_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    return db.query(Job).order_by(Job.id.desc()).all()
+def list_jobs(
+    include_archived: bool = False,
+    _user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # 默认历史隐藏已归档条目；带 include_archived=true 时全部返回
+    query = db.query(Job)
+    if not include_archived:
+        query = query.filter(Job.is_archived.is_(False))
+    return query.order_by(Job.id.desc()).all()
+
+
+@router.post("/jobs/{job_id}/archive", response_model=JobOut)
+def archive_job(
+    job_id: int,
+    user: dict = Depends(require_bioops),
+    db: Session = Depends(get_db),
+):
+    job = (
+        db.query(Job)
+        .options(joinedload(Job.stages))
+        .filter(Job.id == job_id)
+        .first()
+    )
+    if not job:
+        raise HTTPException(status_code=404, detail="作业不存在")
+    if job.is_archived:
+        raise HTTPException(status_code=400, detail="作业已归档")
+    if job.status != "success":
+        raise HTTPException(status_code=400, detail="仅成功态作业允许归档")
+    job.is_archived = True
+    job.archived_at = datetime.now(timezone.utc)
+    job.archived_by = user["username"]
+    db.commit()
+    db.refresh(job)
+    return job
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut)
